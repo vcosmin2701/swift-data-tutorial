@@ -2,19 +2,34 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) var context
     @State private var isShowingItemSheet = false
-    var expenses: [Expense] = []
+    @Query(filter: #Predicate<Expense> { $0.value > 1000}, sort: \Expense.date)
+    var expenses: [Expense]
+    // @Query(sort: \Expense.date)
+    @State private var expenseToEdit: Expense?
     
     var body: some View {
         NavigationStack {
             List {
                 ForEach(expenses) { expense in
                     ExpenseCell(expense: expense)
+                        .onTapGesture {
+                            expenseToEdit = expense
+                        }
+                }
+                .onDelete { indexSet in
+                    for index in indexSet {
+                        context.delete(expenses[index])
+                    }
                 }
             }
             .navigationTitle("Expenses")
             .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $isShowingItemSheet) { AddExpenseSheet()}
+            .sheet(item: $expenseToEdit) { expense in
+                UpdateExpenseSheet(expense: expense)
+            }
             .toolbar {
                 if !expenses.isEmpty {
                     Button("Add Expense", systemImage:"plus") {
@@ -56,6 +71,7 @@ struct ExpenseCell: View {
 }
 
 struct AddExpenseSheet: View {
+    @Environment(\.modelContext) var context
     @Environment(\.dismiss) private var dismiss
     
     @State private var name: String = ""
@@ -77,10 +93,35 @@ struct AddExpenseSheet: View {
                 }
                 ToolbarItemGroup(placement: .topBarTrailing){
                     Button("Save") {
-                        
+                        let expense = Expense(name: name, date: date, value: value)
+                        context.insert(expense)
+                        dismiss()
                     }
                 }
             }
         }
     }
 }
+
+struct UpdateExpenseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var expense: Expense
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Expense Name", text: $expense.name)
+                DatePicker("Date", selection: $expense.date, displayedComponents: .date)
+                TextField("Value", value: $expense.value, format: .currency(code: "USD"))
+            }
+            .navigationTitle("Update Expense")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
